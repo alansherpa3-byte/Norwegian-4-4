@@ -17,36 +17,61 @@
             padding: 20px;
             display: flex;
             flex-direction: column;
-            justify-content: center;
-            align-height: 100vh;
-            height: 90vh;
+            align-items: center;
         }
-        h2 { margin-bottom: 10px; font-size: 22px; color: #aaa; }
+        h2 { margin-bottom: 5px; font-size: 22px; color: #aaa; }
+        
         .card {
-            background-color: #2e7d32;
-            padding: 30px;
-            border-radius: 24px;
-            margin: 20px auto;
-            width: 85%;
-            max-width: 400px;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            background-color: #2196f3;
+            padding: 25px 15px;
+            border-radius: 20px;
+            margin: 15px 0;
+            width: 90%;
+            max-width: 380px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.4);
             transition: background 0.3s;
         }
-        .pace { font-size: 56px; font-weight: 900; font-family: monospace; margin: 10px 0; }
-        .timer { font-size: 48px; font-weight: bold; font-family: monospace; margin: 20px 0; color: #fff; }
-        .sub-text { font-size: 14px; opacity: 0.8; }
+        .pace { font-size: 54px; font-weight: 900; font-family: monospace; margin: 5px 0; }
+        .timer { font-size: 46px; font-weight: bold; font-family: monospace; margin: 15px 0; color: #fff; }
+        .sub-text { font-size: 14px; opacity: 0.85; font-weight: bold; }
+        
+        /* Settings Box */
+        .settings-box {
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 14px;
+            width: 90%;
+            max-width: 380px;
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+        .setting-item { display: flex; flex-direction: column; align-items: center; }
+        .setting-item label { font-size: 12px; color: #888; margin-bottom: 4px; }
+        .setting-item input {
+            width: 70px;
+            padding: 8px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background: #2a2a2a;
+            color: white;
+            font-size: 16px;
+            text-align: center;
+            font-weight: bold;
+        }
+
         .btn {
             font-size: 20px;
             font-weight: bold;
             padding: 16px 40px;
             border-radius: 14px;
             border: none;
-            background-color: #2196f3;
+            background-color: #4caf50;
             color: white;
             cursor: pointer;
-            width: 85%;
-            max-width: 400px;
-            margin-top: 10px;
+            width: 90%;
+            max-width: 380px;
         }
         .btn-pause { background-color: #ff9800; color: #000; }
     </style>
@@ -55,59 +80,123 @@
 
     <h2>Norwegian 4×4 Intervals</h2>
 
+    <!-- Pace Settings -->
+    <div class="settings-box">
+        <div class="setting-item">
+            <label>Target (min:sec)</label>
+            <input type="text" id="targetPaceInput" value="5:00">
+        </div>
+        <div class="setting-item">
+            <label>Buffer (sec)</label>
+            <input type="number" id="bufferInput" value="15">
+        </div>
+    </div>
+
     <!-- Live Pace Card -->
     <div class="card" id="paceCard">
-        <div class="sub-text" id="statusText">Pace Inactive</div>
+        <div class="sub-text" id="statusText">TAP START TO BEGIN</div>
         <div class="pace" id="paceDisplay">--:--</div>
-        <div class="sub-text">Target: 5:00 min/km</div>
+        <div class="sub-text" id="targetDisplay">Target: 5:00 min/km</div>
     </div>
 
     <!-- Interval Timer -->
     <div class="timer" id="timerDisplay">04:00</div>
 
-    <!-- Controls -->
+    <!-- Start Button -->
     <button class="btn" id="actionBtn" onclick="toggleWorkout()">START RUN</button>
 
     <script>
         let watchId = null;
         let isRunning = false;
         let timerInterval = null;
-        let timeRemaining = 240; // 4 minutes work block
+        let timeRemaining = 240; // 4 minutes
+        let audioCtx = null;
+
+        // Audio Beep Synthesizer for iOS
+        function playBeep(frequency = 880, type = 'sine', duration = 0.5) {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.value = frequency;
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            gain.gain.setValueAtTime(1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function parsePaceToSeconds(paceStr) {
+            let parts = paceStr.split(':');
+            let mins = parseInt(parts[0]) || 5;
+            let secs = parseInt(parts[1]) || 0;
+            return (mins * 60) + secs;
+        }
 
         function toggleWorkout() {
             const btn = document.getElementById('actionBtn');
             const card = document.getElementById('paceCard');
             
+            // Parse target pace settings
+            const targetPaceStr = document.getElementById('targetPaceInput').value;
+            const targetSec = parsePaceToSeconds(targetPaceStr);
+            const bufferSec = parseInt(document.getElementById('bufferInput').value) || 15;
+
+            document.getElementById('targetDisplay').innerText = `Target: ${targetPaceStr} min/km (±${bufferSec}s)`;
+
             if (!isRunning) {
-                // Start
                 isRunning = true;
                 btn.innerText = "PAUSE";
                 btn.classList.add("btn-pause");
-                card.style.backgroundColor = "#1976d2";
                 document.getElementById('statusText').innerText = "CURRENT PACE (min/km)";
+
+                // Initialize Audio Context on tap
+                playBeep(600, 'sine', 0.1); 
 
                 // Start GPS Pace Tracking
                 if (navigator.geolocation) {
                     watchId = navigator.geolocation.watchPosition(pos => {
-                        let speed = pos.coords.speed; // meters per second
+                        let speed = pos.coords.speed; // m/s
                         if (speed && speed > 0.5) {
-                            let secPerKm = 1000 / speed;
-                            let m = Math.floor(secPerKm / 60);
-                            let s = Math.floor(secPerKm % 60);
+                            let currentSecPerKm = 1000 / speed;
+                            let m = Math.floor(currentSecPerKm / 60);
+                            let s = Math.floor(currentSecPerKm % 60);
                             document.getElementById('paceDisplay').innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
+
+                            // Check Pace against Target
+                            if (currentSecPerKm >= (targetSec - bufferSec) && currentSecPerKm <= (targetSec + bufferSec)) {
+                                card.style.backgroundColor = "#4caf50"; // Green: On Pace
+                            } else if (currentSecPerKm > (targetSec + bufferSec)) {
+                                card.style.backgroundColor = "#f44336"; // Red: Too Slow
+                            } else {
+                                card.style.backgroundColor = "#ff9800"; // Orange: Too Fast
+                            }
                         } else {
                             document.getElementById('paceDisplay').innerText = "--:--";
+                            card.style.backgroundColor = "#2196f3";
                         }
-                    }, err => alert("GPS Error: " + err.message), { enableHighAccuracy: true });
+                    }, err => console.log(err), { enableHighAccuracy: true });
                 }
 
-                // Start Countdown Timer
+                // Timer Countdown
                 timerInterval = setInterval(() => {
                     if (timeRemaining > 0) {
                         timeRemaining--;
                         updateTimerDisplay();
+                        
+                        // Audio warning beep on last 3 seconds
+                        if (timeRemaining <= 3 && timeRemaining > 0) {
+                            playBeep(880, 'sine', 0.2);
+                        }
                     } else {
-                        alert("Interval Complete!");
+                        // Long completion beep
+                        playBeep(1200, 'square', 0.8);
                         resetWorkout();
                     }
                 }, 1000);
@@ -124,8 +213,8 @@
             
             document.getElementById('actionBtn').innerText = "START RUN";
             document.getElementById('actionBtn').classList.remove("btn-pause");
-            document.getElementById('paceCard').style.backgroundColor = "#2e7d32";
-            document.getElementById('statusText').innerText = "Pace Inactive";
+            document.getElementById('paceCard').style.backgroundColor = "#2196f3";
+            document.getElementById('statusText').innerText = "TAP START TO BEGIN";
             document.getElementById('paceDisplay').innerText = "--:--";
             timeRemaining = 240;
             updateTimerDisplay();

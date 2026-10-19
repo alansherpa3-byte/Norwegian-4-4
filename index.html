@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Norwegian 4x4 Runner</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-height: 100vh;
+            height: 90vh;
+        }
+        h2 { margin-bottom: 10px; font-size: 22px; color: #aaa; }
+        .card {
+            background-color: #2e7d32;
+            padding: 30px;
+            border-radius: 24px;
+            margin: 20px auto;
+            width: 85%;
+            max-width: 400px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            transition: background 0.3s;
+        }
+        .pace { font-size: 56px; font-weight: 900; font-family: monospace; margin: 10px 0; }
+        .timer { font-size: 48px; font-weight: bold; font-family: monospace; margin: 20px 0; color: #fff; }
+        .sub-text { font-size: 14px; opacity: 0.8; }
+        .btn {
+            font-size: 20px;
+            font-weight: bold;
+            padding: 16px 40px;
+            border-radius: 14px;
+            border: none;
+            background-color: #2196f3;
+            color: white;
+            cursor: pointer;
+            width: 85%;
+            max-width: 400px;
+            margin-top: 10px;
+        }
+        .btn-pause { background-color: #ff9800; color: #000; }
+    </style>
+</head>
+<body>
+
+    <h2>Norwegian 4×4 Intervals</h2>
+
+    <!-- Live Pace Card -->
+    <div class="card" id="paceCard">
+        <div class="sub-text" id="statusText">Pace Inactive</div>
+        <div class="pace" id="paceDisplay">--:--</div>
+        <div class="sub-text">Target: 5:00 min/km</div>
+    </div>
+
+    <!-- Interval Timer -->
+    <div class="timer" id="timerDisplay">04:00</div>
+
+    <!-- Controls -->
+    <button class="btn" id="actionBtn" onclick="toggleWorkout()">START RUN</button>
+
+    <script>
+        let watchId = null;
+        let isRunning = false;
+        let timerInterval = null;
+        let timeRemaining = 240; // 4 minutes work block
+
+        function toggleWorkout() {
+            const btn = document.getElementById('actionBtn');
+            const card = document.getElementById('paceCard');
+            
+            if (!isRunning) {
+                // Start
+                isRunning = true;
+                btn.innerText = "PAUSE";
+                btn.classList.add("btn-pause");
+                card.style.backgroundColor = "#1976d2";
+                document.getElementById('statusText').innerText = "CURRENT PACE (min/km)";
+
+                // Start GPS Pace Tracking
+                if (navigator.geolocation) {
+                    watchId = navigator.geolocation.watchPosition(pos => {
+                        let speed = pos.coords.speed; // meters per second
+                        if (speed && speed > 0.5) {
+                            let secPerKm = 1000 / speed;
+                            let m = Math.floor(secPerKm / 60);
+                            let s = Math.floor(secPerKm % 60);
+                            document.getElementById('paceDisplay').innerText = `${m}:${s < 10 ? '0' : ''}${s}`;
+                        } else {
+                            document.getElementById('paceDisplay').innerText = "--:--";
+                        }
+                    }, err => alert("GPS Error: " + err.message), { enableHighAccuracy: true });
+                }
+
+                // Start Countdown Timer
+                timerInterval = setInterval(() => {
+                    if (timeRemaining > 0) {
+                        timeRemaining--;
+                        updateTimerDisplay();
+                    } else {
+                        alert("Interval Complete!");
+                        resetWorkout();
+                    }
+                }, 1000);
+
+            } else {
+                resetWorkout();
+            }
+        }
+
+        function resetWorkout() {
+            isRunning = false;
+            clearInterval(timerInterval);
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+            
+            document.getElementById('actionBtn').innerText = "START RUN";
+            document.getElementById('actionBtn').classList.remove("btn-pause");
+            document.getElementById('paceCard').style.backgroundColor = "#2e7d32";
+            document.getElementById('statusText').innerText = "Pace Inactive";
+            document.getElementById('paceDisplay').innerText = "--:--";
+            timeRemaining = 240;
+            updateTimerDisplay();
+        }
+
+        function updateTimerDisplay() {
+            let m = Math.floor(timeRemaining / 60);
+            let s = timeRemaining % 60;
+            document.getElementById('timerDisplay').innerText = `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+{
+  "name": "Norwegian 4x4 Runner",
+  "short_name": "4x4 Runner",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#121212",
+  "theme_color": "#121212",
+  "icons": []
+}
